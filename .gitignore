@@ -1,0 +1,15 @@
+# Java
+**/target/
+**/.gradle/
+**/build/
+**/.idea/
+**/*.iml
+
+# Node/Expo
+**/node_modules/
+**/.expo/
+**/dist/
+**/.env
+
+# OS
+.DS_Store

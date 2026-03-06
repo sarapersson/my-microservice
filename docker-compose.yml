@@ -1,0 +1,58 @@
+# =============================================================================
+# docker-compose.yml — LOCAL development
+# =============================================================================
+# Starts all three containers locally:
+#   1. gateway       — Nginx reverse proxy on port 80
+#   2. auth-service  — Spring Boot auth service on port 8081
+#   3. info-service  — Spring Boot info service on port 8080
+#
+# Usage:
+#   docker compose up --build      (build images and start all services)
+#   docker compose down             (stop and remove containers)
+#
+# The services are built from local Dockerfiles ("build: ./services/...").
+# Docker Compose creates a shared network so containers can reach each other
+# by hostname (e.g. info-service calls "http://auth-service:8081").
+# =============================================================================
+
+services:
+
+  # --- Nginx Gateway (reverse proxy) ---
+  # Routes incoming HTTP requests to the correct backend service:
+  #   /api/*  → info-service:8080
+  #   /auth/* → auth-service:8081
+  gateway:
+    image: nginx:alpine                     # Official lightweight Nginx image
+    container_name: gateway
+    ports:
+      - "80:80"                             # Expose port 80 to the host machine
+    volumes:
+      - ./infra/nginx.conf:/etc/nginx/conf.d/default.conf:ro   # Mount our custom Nginx config (read-only)
+    depends_on:
+      - info-service
+      - auth-service
+
+  # --- Auth Service ---
+  # Handles login (POST /auth/login) and token validation (GET /auth/validate).
+  # Built from the local Dockerfile in ./services/auth-service.
+  auth-service:
+    build: ./services/auth-service          # Build the Docker image from this directory
+    container_name: auth-service
+    environment:
+      - AUTH_DELAY_MS=2000                  # Artificial delay for auth validation (0 = no delay)
+    expose:
+      - "8081"                              # Make port 8081 accessible to other containers (not to host)
+
+  # --- Info Service ---
+  # Returns protected data (GET /api/info) after validating the token
+  # by making a synchronous HTTP call to auth-service.
+  # This inter-service call fulfills the "synkron kommunikation" requirement.
+  info-service:
+    build: ./services/info-service          # Build the Docker image from this directory
+    container_name: info-service
+    environment:
+      - AUTH_URL=http://auth-service:8081   # Tell info-service where to find auth-service (Docker DNS)
+    depends_on:
+      - auth-service                        # Start auth-service before info-service
+    expose:
+      - "8080"                              # Make port 8080 accessible to other containers (not to host)
